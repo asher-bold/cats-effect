@@ -101,43 +101,23 @@ object Resources extends IOApp.Simple {
     IO(s"closing file at $path").debug >> IO(scanner.close())
   }
 
-  def resourceReadFile(path: String) =
-    IO(s"opening file at $path") >>
-      getResourceFromFile(path).use { scanner =>
-        readLineByLine(scanner)
-      }
+  def resourceReadFile(path: String) = ???
 
-  def cancelReadFile(path: String) = for {
-    fib <- resourceReadFile(path).start
-    _ <- IO.sleep(2.seconds) >> fib.cancel
-  } yield ()
+  def cancelReadFile(path: String) = ???
 
   // nested resources
-  def connFromConfResource(path: String) =
-    Resource.make(IO("opening file").debug >> openFileScanner(path))(scanner => IO("closing file").debug >> IO(scanner.close()))
-      .flatMap(scanner => Resource.make(IO(new Connection(scanner.nextLine())))(conn => conn.close().void))
-
+  def connFromConfResource(path: String) = ???
   // equivalent
-  def connFromConfResourceClean(path: String) = for {
-    scanner <- Resource.make(IO("opening file").debug >> openFileScanner(path))(scanner => IO("closing file").debug >> IO(scanner.close()))
-    conn <- Resource.make(IO(new Connection(scanner.nextLine())))(conn => conn.close().void)
-  } yield conn
+  def connFromConfResourceClean(path: String) = ???
 
-  val openConnection = connFromConfResourceClean("cats-effect/src/main/resources/connection.txt").use(conn => conn.open() >> IO.never)
-  val canceledConnection = for {
-    fib <- openConnection.start
-    _ <- IO.sleep(1.second) >> IO("cancelling!").debug >> fib.cancel
-  } yield ()
+  val openConnection = ???
+  val canceledConnection = ???
 
   // connection + file will close automatically
 
   // finalizers to regular IOs
-  val ioWithFinalizer = IO("some resource").debug.guarantee(IO("freeing resource").debug.void)
-  val ioWithFinalizer_v2 = IO("some resource").debug.guaranteeCase {
-    case Succeeded(fa) => fa.flatMap(result => IO(s"releasing resource: $result").debug).void
-    case Errored(e) => IO("nothing to release").debug.void
-    case Canceled() => IO("resource got canceled, releasing what's left").debug.void
-  }
+  val ioWithFinalizer = ???
+  val ioWithFinalizer_v2 = ???
 
 
   override def run = ioWithFinalizer.void
