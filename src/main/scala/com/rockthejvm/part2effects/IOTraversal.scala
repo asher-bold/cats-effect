@@ -1,5 +1,6 @@
 package com.rockthejvm.part2effects
 
+import cats.Applicative
 import cats.effect.{IO, IOApp}
 
 import scala.concurrent.Future
@@ -53,24 +54,28 @@ object IOTraversal extends IOApp.Simple {
    */
   // hint: use Traverse API
   def sequence[A](listOfIOs: List[IO[A]]): IO[List[A]] =
-    
+    Traverse[List].traverse(listOfIOs)(identity)
 
   // hard version
   def sequence_v2[F[_] : Traverse, A](wrapperOfIOs: F[IO[A]]): IO[F[A]] =
+    Traverse[F].traverse(wrapperOfIOs)(identity)
    
   // parallel version
+  import cats.syntax.parallel._
   def parSequence[A](listOfIOs: List[IO[A]]): IO[List[A]] =
+    listOfIOs.parTraverse(identity)
     
   // hard version
   def parSequence_v2[F[_] : Traverse, A](wrapperOfIOs: F[IO[A]]): IO[F[A]] =
+    wrapperOfIOs.parTraverse(identity)
    
 
   // existing sequence API
-  val singleIO_v2: IO[List[Int]] = 
+  val singleIO_v2: IO[List[Int]] = ???
 
   // parallel sequencing
-  val parallelSingleIO_v2: IO[List[Int]] =
-  val parallelSingleIO_v3: IO[List[Int]] = 
+  val parallelSingleIO_v2: IO[List[Int]] = ???
+  val parallelSingleIO_v3: IO[List[Int]] = ???
 
   override def run =
     parallelSingleIO_v3.map(_.sum).debug.void
