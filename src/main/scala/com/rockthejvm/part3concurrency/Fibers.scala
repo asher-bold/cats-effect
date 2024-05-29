@@ -40,7 +40,7 @@ object Fibers extends IOApp.Simple {
    */
 
   val someIOOnAnotherThread = runOnSomeOtherThread(meaningOfLife)
-  val someResultFromAnotherThread = someIOOnAnotherThread.flatMap {
+  val someResultFromAnotherThread: IO[Int] = someIOOnAnotherThread.flatMap {
     case Succeeded(effect) => effect
     case Errored(e) => IO(0)
     case Canceled() => IO(0)
@@ -86,18 +86,13 @@ object Fibers extends IOApp.Simple {
    *      - a RuntimeException if it times out (i.e. cancelled by the timeout)
    */
   // 1
-  def processResultsFromFiber[A](io: IO[A]): IO[A] = {
-    val ioResult = for {
-      fib <- io.debug.start
-      result <- fib.join
-    } yield result
-
-    ioResult.flatMap {
+  def processResultsFromFiber[A](io: IO[A]): IO[A] = for{
+    fib <- io.start
+    res <- fib.join.flatMap {
       case Succeeded(fa) => fa
-      case Errored(e) => IO.raiseError(e)
-      case Canceled() => IO.raiseError(new RuntimeException("Computation canceled."))
+      case _ => IO.raiseError(new RuntimeException("failed effect"))
     }
-  }
+  } yield res
 
   def testEx1() = {
     val aComputation = IO("starting").debug >> IO.sleep(1.second) >> IO("done!").debug >> IO(42)
@@ -105,24 +100,18 @@ object Fibers extends IOApp.Simple {
   }
 
   // 2
-  def tupleIOs[A, B](ioa: IO[A], iob: IO[B]): IO[(A, B)] = {
-    val result = for {
-      fiba <- ioa.start
-      fibb <- iob.start
-      resulta <- fiba.join
-      resultb <- fibb.join
-    } yield (resulta, resultb)
-
-    result.flatMap {
-      case (Succeeded(fa), Succeeded(fb)) => for {
-        a <- fa
-        b <- fb
-      } yield (a, b)
+  def tupleIOs[A, B](ioa: IO[A], iob: IO[B]): IO[(A, B)] = for {
+    fibA <- ioa.start
+    fibB <- iob.start
+    resA <- fibA.join
+    resB <- fibB.join
+    res <- (resA, resB) match {
       case (Errored(e), _) => IO.raiseError(e)
       case (_, Errored(e)) => IO.raiseError(e)
-      case _ => IO.raiseError(new RuntimeException("Some computation canceled."))
+      case (Succeeded(a), Succeeded(b)) => IO.both(a, b)
+      case _ => IO.raiseError(new RuntimeException("failed tupled effect"))
     }
-  }
+  } yield res
 
   def testEx2() = {
     val firstIO = IO.sleep(2.seconds) >> IO(1).debug
@@ -131,23 +120,20 @@ object Fibers extends IOApp.Simple {
   }
 
   // 3
-  def timeout[A](io: IO[A], duration: FiniteDuration): IO[A] = {
-    val computation = for {
-      fib <- io.start
-      _ <- (IO.sleep(duration) >> fib.cancel).start // careful - fibers can leak
-      result <- fib.join
-    } yield result
-
-    computation.flatMap {
-      case Succeeded(fa) => fa
+  def timeout[A](io: IO[A], duration: FiniteDuration): IO[A] = for {
+    fib <- io.start
+    _ <- (IO.sleep(duration) >> fib.cancel).start
+    joined <- fib.join
+    res <- joined match {
+      case Succeeded(a) => a
       case Errored(e) => IO.raiseError(e)
-      case Canceled() => IO.raiseError(new RuntimeException("Computation canceled."))
+      case Canceled() => IO.raiseError(new RuntimeException("timeout"))
     }
-  }
+  } yield res
 
   def testEx3() = {
     val aComputation = IO("starting").debug >> IO.sleep(1.second) >> IO("done!").debug >> IO(42)
-    timeout(aComputation, 500.millis).debug.void
+    timeout(aComputation, 1500.millis).debug.void
   }
 
   override def run = testEx3()
